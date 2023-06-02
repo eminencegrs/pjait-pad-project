@@ -62,8 +62,6 @@ By investigating these aspects, we aim to gain a deeper understanding of the pro
 
 ## Conclusion
 
----
-
 In summary, our project aims to collect and analyze data from StackOverflow using its API, focusing on questions (there might also be included answers and comments) and related data. The goal is to better understand the programming community, common challenges, emerging trends, and the effectiveness of the StackOverflow platform. By investigating various aspects of the data, such as popular programming languages, user engagement patterns, and the quality of solutions, we hope to better understand the current technological trends as well as future ones.
 
 To successfully complete this project, we will leverage Python and relevant libraries for data processing, analysis, and visualization. We will also explore machine learning libraries for classification and regression tasks.
