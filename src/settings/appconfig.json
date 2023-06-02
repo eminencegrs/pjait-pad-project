@@ -1,0 +1,9 @@
+{
+    "stack_overflow": {
+        "api_key": "EINBWG8O*ByW2yEL2WRQRQ((",
+        "api_url": "https://api.stackexchange.com/2.3"
+    },
+    "languages_to_analyze": [
+        "c++", "c#", "go", "java", "javascript", "kotlin", "python", "ruby", "scala", "swift", "typescript"
+    ]
+}
