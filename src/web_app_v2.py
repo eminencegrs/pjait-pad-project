@@ -1,92 +1,65 @@
-import sys
-import os
 import dash
 import dash_table
-import dash_core_components as dcc
-import dash_html_components as html
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import seaborn as sns
-import matplotlib.pyplot as plt
-from plotly.graph_objs import Scatter3d, Layout, Figure
+
+from dash import dcc
+from dash import html
 from dash.dependencies import Input, Output, State
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import StandardScaler
+from sklearn import svm
 
-# Set working directory.
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, os.path.join(parent_dir, 'dataset'))
+from column_renamer import ColumnRenamer
+from column_filter import ColumnFilter
+from data_cleaner import DataCleaner
+from data_enhancer import DataEnhancer
+from data_reader import DataReader
 
-# Read data from the file.
-dataset_path = os.path.join(parent_dir, 'dataset', 'questions.csv')
-data_frame = pd.read_csv(dataset_path)
-columns = [
-    'question_id',
-    'title',
-    'language',
-    'score',
-    'is_answered',
-    'accepted_answer_id',
-    'view_count',
-    'answer_count',
-    'creation_date',
-    'last_edit_date',
-    'last_activity_date',
-    'closed_date',
-    'closed_reason',
-    'owner.account_id',
-    'owner.reputation',
-    'tags'
-]
+# Read data.
+data_reader = DataReader('questions_small.csv')
+data_frame = data_reader.read_data()
 
-# Clearing data. 
-data_frame = data_frame[columns]
-data_frame['accepted_answer_id'] = data_frame['accepted_answer_id'].fillna('N/A')
-data_frame['last_edit_date'] = data_frame['last_edit_date'].fillna('N/A')
-data_frame['closed_date'] = data_frame['closed_date'].fillna('N/A')
-data_frame['closed_reason'] = data_frame['closed_reason'].fillna('N/A')
+# Choose the required columns only.
+column_filter = ColumnFilter()
+data_frame = column_filter.filter_data(data_frame)
 
-# Renaming columns to make them readable.
-data_frame.rename(
-    columns = {
-        'question_id': 'ID',
-        'title': 'Title',
-        'language': 'Language',
-        'score': 'Score',
-        'is_answered': 'Is Answered?',
-        'accepted_answer_id': 'Answer ID',
-        'view_count': 'View Count',
-        'answer_count': 'Answer Count',
-        'creation_date': 'Creation Date',
-        'last_edit_date': 'Edit Date',
-        'last_activity_date': 'Last Activity Date',
-        'closed_date': 'Closed Date',
-        'closed_reason': 'Closed Reason',
-        'owner.account_id': 'Owner ID',
-        'owner.reputation': 'Owner Reputation',
-        'tags': 'Tags'
-    },
-    inplace = True)
+# Clear data.
+data_cleaner = DataCleaner()
+data_frame = data_cleaner.clean_data(data_frame)
+
+# Rename columns to make them readable.
+renamer = ColumnRenamer()
+data_frame = renamer.rename_columns(data_frame)
+
+# Extend the data frame with additional columns.
+enhancer = DataEnhancer()
+data_frame = enhancer.enhance(data_frame)
 
 # The variable dropdown.
-df_for_dropdown = data_frame[['View Count', 'Answer Count', 'Owner Reputation']]
+variable_options = ['View Count', 'Answer Count', 'Owner Reputation', 'Tags Count']
+
+# The variables for 3D graph's dropdown.
+variable_options_for_3d_graph = ['Owner Reputation', 'Score', 'Tags Count', 'View Count']
 
 # The language dropdown.
-language_values = data_frame['Language'].unique()
-language_options = [{'label': 'All', 'value': 'All'}] + [{'label': i, 'value': i} for i in language_values]
+languages = data_frame['Language'].unique()
+language_options = [{'label': 'All', 'value': 'All'}] + [{'label': i, 'value': i} for i in languages]
 
 # Configure the Dash application.
 app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1("Stack Overflow Data Analysis"),
     html.Div([
-        html.H2("Questions Dataset"),
+        html.H3("Questions Dataset"),
+        html.Hr(),
         dash_table.DataTable(
             id = 'table',
             columns = [{"name": i, "id": i} for i in data_frame.columns],
@@ -96,32 +69,133 @@ app.layout = html.Div([
             style_cell_conditional = [{'if': {'column_id': c}, 'textAlign': 'left'} for c in data_frame.columns],
             style_header = {'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
             style_table = {'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
+        ),
+        html.Div([
+            html.H3('Top Languages', style={ 'justify-content': 'center' }),
+            html.Hr(),
+            html.Div([
+                html.Label('Order by:', style={'margin-right': '10px', 'text-align': 'center'}),
+                dcc.Dropdown(
+                    id = 'sorting-order-options',
+                    options = [
+                        {'label': 'Language Name', 'value': 'laguange_name'},
+                        {'label': 'Total Questions', 'value': 'total_count'},
+                        {'label': 'Answered Questions', 'value': 'answered_count'},
+                    ],
+                    value = 'laguange_name',
+                    clearable=False,
+                    style={ 'width': '250px', 'justify-content': 'center' }
+                ),
+            ], style={ 'display': 'flex', 'justify-content': 'center', 'gap': '10px' }),
+            dcc.Graph(id='top-languages-bar')
+        ])
+    ]),
+    html.Div([
+        html.H3('Questions Over Time'),
+        html.Hr(),
+        html.Div([
+            dcc.Dropdown(
+                id='questions-over-time-chart-type',
+                options=[
+                    {'label': 'Scatter', 'value': 'scatter'},
+                    {'label': 'Bar', 'value': 'bar'}
+                ],
+                value='scatter',
+                clearable=False,
+                style={'width': '150px'}
+            ),
+            dcc.Dropdown(
+                id='data-granularity',
+                options=[
+                    {'label': 'Hour', 'value': 'hour'},
+                    {'label': 'Day', 'value': 'day'},
+                    {'label': 'Week', 'value': 'week'},
+                    {'label': 'Month', 'value': 'month'}
+                ],
+                value='month',
+                clearable=False,
+                style={'width': '150px'}
+            ),
+        ], style={'display': 'flex', 'justify-content': 'center', 'gap': '10px'}),
+        dcc.Graph(id='questions-over-time-graph')
+    ]),
+    html.Div([
+        html.H3('Questions by Language Over Time'),
+        html.Hr(),
+        html.Div([
+            dcc.Dropdown(
+                id='questions-by-language-over-time-chart-type',
+                options=[
+                    {'label': 'Scatter', 'value': 'scatter'},
+                    {'label': 'Bar', 'value': 'bar'}
+                ],
+                value='scatter',
+                clearable=False,
+                style={'width': '150px'}
+            ),
+            dcc.Dropdown(
+                id='questions-by-language-over-time-data-granularity',
+                options=[
+                    {'label': 'Hour', 'value': 'hour'},
+                    {'label': 'Day', 'value': 'day'},
+                    {'label': 'Week', 'value': 'week'},
+                    {'label': 'Month', 'value': 'month'}
+                ],
+                value='month',
+                clearable=False,
+                style={'width': '150px'}
+            ),
+        ], style={'display': 'flex', 'justify-content': 'center', 'gap': '10px'}),
+        dcc.Graph(id='questions-by-language-over-time-graph')
+    ]),
+    html.Div([
+        html.H3('Correlation Heatmap'),
+        html.Hr(),
+        dcc.Graph(id='heatmap'),
+        dcc.Interval(
+            id='interval-component',
+            interval = 60 * 1000,
+            n_intervals = 0
         )
     ]),
     html.Div([
-        html.H2('Questions Over Time (v1)'),
-        dcc.Graph(id='questions-year-graph')
-    ]),
-    html.Div([
-        html.H2('Heatmap'),
-        dcc.Graph(id='heatmap-graph')
-    ]),
-    html.Div([
-        html.H2('Questions Over Time (v2)'),
-        dcc.Graph(id='timeline-graph'),
-    ]),
-    html.Div([
-        html.H2('Questions by Language Over Time'),
-        dcc.Graph(id='language-graph'),
-    ]),
-    html.Div([
-        html.H2('3D Analysis Over Time'),
+        html.H3('Questions in 3D'),
+        html.Hr(),
+        html.Div([
+            dcc.Dropdown(
+                id='3d-graph-y-axis-dropdown',
+                options = [{'label': i, 'value': i} for i in variable_options_for_3d_graph],
+                value = variable_options_for_3d_graph[0],
+                clearable=False,
+                style={'width': '150px'}
+            ),
+            dcc.Dropdown(
+                id='3d-graph-z-axis-dropdown',
+                options = [{'label': i, 'value': i} for i in variable_options_for_3d_graph],
+                value = variable_options_for_3d_graph[1],
+                clearable=False,
+                style={'width': '150px'}
+            ),
+            dcc.Dropdown(
+                id='3d-graph-data-granularity',
+                options=[
+                    {'label': 'Hour', 'value': 'hour'},
+                    {'label': 'Day', 'value': 'day'},
+                    {'label': 'Week', 'value': 'week'},
+                    {'label': 'Month', 'value': 'month'}
+                ],
+                value='month',
+                clearable=False,
+                style={'width': '150px'}
+            ),
+        ], style={'display': 'flex', 'justify-content': 'center', 'gap': '10px'}),
         dcc.Graph(id='3d-graph'),
     ]),
     html.Div([
-        html.H2('Data Analysis'),
+        html.H3('Data Analysis: Distribution'),
+        html.Hr(),
         dcc.Dropdown(
-            id = 'model-choice',
+            id = 'data-distribution-model-choice',
             options = [
                 {'label': 'Regression', 'value': 'regression'},
                 {'label': 'Classification', 'value': 'classification'},
@@ -129,12 +203,12 @@ app.layout = html.Div([
             value = 'regression',
         ),
         dcc.Dropdown(
-            id = 'variable-choice',
-            options = [{'label': i, 'value': i} for i in df_for_dropdown.columns],
-            value = df_for_dropdown.columns[0],
+            id = 'data-distribution-variable-choice',
+            options = [{'label': i, 'value': i} for i in variable_options],
+            value = variable_options[0],
         ),
         dcc.Dropdown(
-            id = 'chart-type',
+            id = 'data-distribution-chart-type',
             options = [
                 {'label': 'Histogram', 'value': 'histogram'},
                 {'label': 'Pie', 'value': 'pie'},
@@ -142,13 +216,13 @@ app.layout = html.Div([
             value = 'pie',
             disabled = True
         ),
-        dcc.Dropdown(id='language-choice', options=language_options, value='All'),
-        dcc.Graph(id = 'graph'),
+        dcc.Dropdown(id='data-distribution-language-choice', options=language_options, value='All'),
+        dcc.Graph(id = 'data-distribution-graph'),
     ]),
     html.Div([
-        html.H2('Data Analysis'),
+        html.H3('Data Analysis (general)'),
         dcc.Dropdown(
-            id='model-choice',
+            id='regression-model-choice',
             options=[
                 {'label': 'Logistic Regression (liblinear)', 'value': 'lr_liblinear'},
                 {'label': 'Logistic Regression (newton-cg)', 'value': 'lr_newton'},
@@ -174,9 +248,242 @@ app.layout = html.Div([
     ])
 ])
 
+### Top Languages (bar)
 @app.callback(
-    Output('chart-type', 'disabled'),
-    Input('model-choice', 'value')
+    Output('top-languages-bar', 'figure'),
+    Input('sorting-order-options', 'value')
+)
+def update_top_languages_bar(sorting_order):
+    languages_df = pd.DataFrame(data_frame)
+    languages_df['Is Answered?'] = languages_df['Is Answered?'].astype(int)
+    total_count = languages_df.groupby('Language').size()
+    answered_count = languages_df.groupby('Language')['Is Answered?'].sum()
+    open_count = total_count - answered_count
+    
+    plot_df = pd.DataFrame({'Answered Count': answered_count, 'Total Count': total_count, 'Open Count': open_count}).reset_index()
+
+    if sorting_order == 'language_name':
+        plot_df.sort_values('Language', inplace=True)
+    elif sorting_order == 'total_count':
+        plot_df.sort_values('Total Count', inplace=True)
+    elif sorting_order == 'answered_count':
+        plot_df.sort_values('Answered Count', inplace=True)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Total Count'], name='All', marker_color='#466ba3'))
+    fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Answered Count'], name='Answered Questions', marker_color='#328570'))
+    fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Open Count'], name='Open Questions', marker_color='#e89d87'))
+    fig.update_layout(xaxis_title='Language', yaxis_title='Count')
+    
+    return fig
+
+
+
+### Questions over time.
+@app.callback(
+    Output('questions-over-time-graph', 'figure'),
+    [Input('questions-over-time-chart-type', 'value'),
+     Input('data-granularity', 'value')]
+)
+def update_questions_over_time_graph(chart_type, data_granularity):
+    timeline_df = pd.DataFrame(data_frame)
+    timeline_df['Creation Date'] = pd.to_datetime(timeline_df['Creation Date'])
+
+    if data_granularity == 'hour':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('H')
+    elif data_granularity == 'day':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('D')
+    elif data_granularity == 'week':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('W')
+    elif data_granularity == 'month':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('M')
+
+    answered_count = timeline_df.groupby('time_period')['Is Answered?'].sum()
+    total_count = timeline_df.groupby('time_period').size()
+    plot_df = pd.DataFrame({'Answered Count': answered_count, 'Total Count': total_count}).reset_index()
+    plot_df['time_period'] = plot_df['time_period'].astype(str)
+
+    fig = go.Figure()
+
+    if chart_type == 'scatter':
+        fig.add_trace(go.Scatter(x=plot_df['time_period'], y=plot_df['Answered Count'], mode='lines', name='Answered Count'))
+        fig.add_trace(go.Scatter(x=plot_df['time_period'], y=plot_df['Total Count'], mode='lines', name='Total Count'))
+    else:
+        fig.add_trace(go.Bar(x=plot_df['time_period'], y=plot_df['Answered Count'], name='Answered Count'))
+        fig.add_trace(go.Bar(x=plot_df['time_period'], y=plot_df['Total Count'], name='Total Count'))
+
+    if data_granularity == 'hour':
+        xaxis_title = 'Hour'
+    elif data_granularity == 'day':
+        xaxis_title = 'Day'
+    elif data_granularity == 'week':
+        xaxis_title = 'Week'
+    elif data_granularity == 'month':
+        xaxis_title = 'Month'
+
+    fig.update_layout(xaxis_title=xaxis_title, yaxis_title='Count')
+
+    return fig
+
+
+
+### Questions by language over time.
+@app.callback(
+    Output('questions-by-language-over-time-graph', 'figure'),
+    [Input('questions-by-language-over-time-chart-type', 'value'),
+     Input('questions-by-language-over-time-data-granularity', 'value')]
+)
+def update_questions_by_language_over_time_graph(chart_type, data_granularity):
+    timeline_df = pd.DataFrame(data_frame)
+    timeline_df['Creation Date'] = pd.to_datetime(timeline_df['Creation Date'])
+
+    if data_granularity == 'hour':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('H')
+    elif data_granularity == 'day':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('D')
+    elif data_granularity == 'week':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('W')
+    elif data_granularity == 'month':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('M')
+
+    figure = go.Figure()
+
+    for language in timeline_df['Language'].unique():
+        filtered_df = timeline_df[timeline_df['Language'] == language]
+        total_count = filtered_df.groupby('time_period').size()
+        plot_df = pd.DataFrame({'Count': total_count}).reset_index()
+        plot_df['time_period'] = plot_df['time_period'].astype(str)
+        if chart_type == 'scatter':
+            figure.add_trace(go.Scatter(x=plot_df['time_period'], y=plot_df['Count'], mode='lines', name=language))
+        else:
+            figure.add_trace(go.Bar(x=plot_df['time_period'], y=plot_df['Count'], name=language))
+
+    if data_granularity == 'hour':
+        xaxis_title = 'Hour'
+    elif data_granularity == 'day':
+        xaxis_title = 'Day'
+    elif data_granularity == 'week':
+        xaxis_title = 'Week'
+    elif data_granularity == 'month':
+        xaxis_title = 'Month'
+
+    figure.update_layout(xaxis_title=xaxis_title, yaxis_title='Count')
+
+    return figure
+
+
+
+### Correlation heatmap.
+@app.callback(
+    Output('heatmap', 'figure'),
+    Input('interval-component', 'n_intervals')
+)
+def update_heatmap(fake_param):
+    heatmap_df = pd.DataFrame(data_frame)
+    heatmap_df['Is Answered?'] = heatmap_df['Is Answered?'].astype(int)
+    chosen_columns = data_frame[['Score', 'Is Answered?', 'View Count', 'Answer Count', 'Owner Reputation', 'Tags Count']]
+    correlation_matrix = chosen_columns.corr()
+
+    figure = px.imshow(correlation_matrix)
+    figure.update_layout(
+        annotations=[
+            dict(
+                x=i,
+                y=j,
+                text=f'{correlation_matrix.iloc[i, j]:.2f}',
+                showarrow=False,
+                font=dict(color='white' if abs(correlation_matrix.iloc[i, j]) > 0.5 else 'black')
+            )
+            for i in range(correlation_matrix.shape[0])
+            for j in range(correlation_matrix.shape[1])
+        ]
+    )
+
+    return figure
+
+
+
+### 3D graph.
+@app.callback(
+    Output('3d-graph', 'figure'),
+    [Input('interval-component', 'n_intervals'),
+     Input('3d-graph-data-granularity', 'value'),
+     Input('3d-graph-y-axis-dropdown', 'value'),
+     Input('3d-graph-z-axis-dropdown', 'value')]
+)
+def update_3d_graph(fake_param, data_granularity, y_axis, z_axis):
+    timeline_df = pd.DataFrame(data_frame)
+    timeline_df['Creation Date'] = pd.to_datetime(timeline_df['Creation Date'])
+    
+    if data_granularity == 'hour':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('H')
+    elif data_granularity == 'day':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('D')
+    elif data_granularity == 'week':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('W')
+    elif data_granularity == 'month':
+        timeline_df['time_period'] = timeline_df['Creation Date'].dt.to_period('M')
+
+    timeline_df['time_period'] = timeline_df['time_period'].astype(str)
+
+    y_values = None
+    if y_axis == 'Owner Reputation':
+        y_values = timeline_df['Owner Reputation']
+    elif y_axis == 'Score':
+        y_values = timeline_df['Score']
+    elif y_axis == 'Tags Count':
+        y_values = timeline_df['Tags Count']
+    elif y_axis == 'View Count':
+        y_values = timeline_df['View Count']
+
+    z_values = None
+    if z_axis == 'Owner Reputation':
+        z_values = timeline_df['Owner Reputation']
+    elif z_axis == 'Score':
+        z_values = timeline_df['Score']
+    elif z_axis == 'Tags Count':
+        z_values = timeline_df['Tags Count']
+    elif z_axis == 'View Count':
+        z_values = timeline_df['View Count']
+
+    plot_df = pd.DataFrame({
+        'Time Period': timeline_df['time_period'],
+        'Y Axis': y_values,
+        'Z Axis': z_values
+    })
+
+    trace = go.Scatter3d(
+        x=plot_df['Time Period'],
+        y=plot_df['Y Axis'],
+        z=plot_df['Z Axis'],
+        mode='markers',
+        marker=dict(
+            size=5,
+            #color='blue',
+            color=plot_df['Y Axis'],
+            colorscale='Viridis',
+        )
+    )
+
+    layout = go.Layout(
+        margin=dict(l=0, r=0, b=0, t=0),
+        scene=dict(
+            xaxis_title='Time Period',
+            yaxis_title=y_axis,
+            zaxis_title=z_axis
+        )
+    )
+
+    figure = go.Figure(data=[trace], layout=layout)
+
+    return figure
+
+
+
+### Data Analysis: Distribution.
+@app.callback(
+    Output('data-distribution-chart-type', 'disabled'),
+    Input('data-distribution-model-choice', 'value')
 )
 def update_chart_dropdown_disabled(selected_model):
     if selected_model == 'regression':
@@ -185,17 +492,22 @@ def update_chart_dropdown_disabled(selected_model):
         return False
 
 @app.callback(
-    Output('graph', 'figure'),
-    [Input('model-choice', 'value'),
-     Input('variable-choice', 'value'),
-     Input('chart-type', 'value'),
-     Input('language-choice', 'value')]
+    Output('data-distribution-graph', 'figure'),
+    [Input('data-distribution-model-choice', 'value'),
+     Input('data-distribution-variable-choice', 'value'),
+     Input('data-distribution-chart-type', 'value'),
+     Input('data-distribution-language-choice', 'value')]
 )
 def update_figure(selected_model, selected_variable, chart_type, selected_language):
     if selected_language == 'All':
         filtered_df = data_frame
     else:
         filtered_df = data_frame[data_frame['Language'] == selected_language]
+    
+    # This trendline, specified as "ols" (Ordinary Least Squares),
+    # is a line of best fit that minimizes the sum of the squared residuals in the dataset,
+    # effectively trying to capture the trend in the data.
+    # This can help in identifying the general relationship between the two variables.
     
     if selected_model == 'regression':
         figure = px.scatter(filtered_df, x=selected_variable, y='Score', trendline="ols")
@@ -217,132 +529,15 @@ def update_figure(selected_model, selected_variable, chart_type, selected_langua
     figure.update_layout(transition_duration=500)
     return figure
 
-@app.callback(
-    Output('timeline-graph', 'figure'),
-    [Input('model-choice', 'value')]
-)
-def update_timeline_graph(selected_model):
-    timeline_data_frame = pd.DataFrame(data_frame)
-    timeline_data_frame['Creation Date'] = pd.to_datetime(timeline_data_frame['Creation Date'])
-    timeline_data_frame['day'] = timeline_data_frame['Creation Date'].dt.to_period('D')
-    timeline_data_frame['Is Answered?'] = timeline_data_frame['Is Answered?'].astype(int)
-    question_counts = timeline_data_frame.groupby('day')['Is Answered?'].sum()
-    question_total = timeline_data_frame.groupby('day').size()
-    plot_df = pd.DataFrame({'Answered Count': question_counts, 'Total Count': question_total}).reset_index()
-    plot_df['day'] = plot_df['day'].dt.strftime('%Y-%m-%d')
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=plot_df['day'], y=plot_df['Answered Count'], mode='lines', name='Answered Count'))
-    fig.add_trace(go.Scatter(x=plot_df['day'], y=plot_df['Total Count'], mode='lines', name='Total Count'))
-    fig.update_layout(title='Count of Questions Over Time', xaxis_title='Day', yaxis_title='Count')
-    return fig
-
-@app.callback(
-    Output('language-graph', 'figure'),
-    [Input('model-choice', 'value')]
-)
-def update_language_graph(selected_model):
-    timeline_data_frame = pd.DataFrame(data_frame)
-    timeline_data_frame['Creation Date'] = pd.to_datetime(timeline_data_frame['Creation Date'])
-    timeline_data_frame['day'] = timeline_data_frame['Creation Date'].dt.to_period('D')
-    timeline_data_frame['Is Answered?'] = timeline_data_frame['Is Answered?'].astype(int)
-    fig = go.Figure()
-
-    for language in timeline_data_frame['Language'].unique():
-        filtered_df = timeline_data_frame[timeline_data_frame['Language'] == language]
-        question_counts = filtered_df.groupby('day').size()
-        plot_df = pd.DataFrame({'Count': question_counts}).reset_index()
-        plot_df['day'] = plot_df['day'].dt.strftime('%Y-%m-%d')
-        fig.add_trace(go.Scatter(x=plot_df['day'], y=plot_df['Count'], mode='lines', name=language))
-
-    fig.update_layout(title='Count of Questions by Language Over Time', xaxis_title='Day', yaxis_title='Count')
-
-    return fig
-
-@app.callback(
-    Output('3d-graph', 'figure'),
-    [Input('model-choice', 'value')]
-)
-def update_multivariable_graph(selected_model):
-    timeline_data_frame = pd.DataFrame(data_frame)
-    timeline_data_frame['Creation Date'] = pd.to_datetime(timeline_data_frame['Creation Date'])
-    timeline_data_frame['day'] = timeline_data_frame['Creation Date'].dt.to_period('D')
-    timeline_data_frame['Is Answered?'] = timeline_data_frame['Is Answered?'].astype(int)
-    answered_counts = timeline_data_frame.groupby('day')['Is Answered?'].sum()
-    total_counts = timeline_data_frame.groupby('day').size()
-    view_counts = timeline_data_frame.groupby('day')['View Count'].sum()
-    
-    plot_df = pd.DataFrame({'Answered Count': answered_counts, 'Total Count': total_counts, 'View Count': view_counts}).reset_index()
-    plot_df['day'] = plot_df['day'].dt.strftime('%Y-%m-%d')
-
-    trace = Scatter3d(
-        x=plot_df['day'],
-        y=plot_df['Answered Count'],
-        z=plot_df['View Count'],
-        mode='markers',
-        marker=dict(
-            size=5,
-            color=plot_df['View Count'], 
-            colorscale='Viridis',
-        )
-    )
-
-    layout = Layout(
-        margin=dict(l = 0, r = 0, b = 0, t = 0),
-        scene=dict(
-            xaxis_title='Day',
-            yaxis_title='Answered Questions',
-            zaxis_title='View Count',
-        )
-    )
-
-    fig = Figure(data=[trace], layout=layout)
-
-    return fig
 
 
-### Questions a year.
-@app.callback(
-    Output('questions-year-graph', 'figure'),
-    [Input('model-choice', 'value')]
-)
-def update_questions_year_plot(n):
-    timeline_data_frame = pd.DataFrame(data_frame)
-    timeline_data_frame['Creation Date'] = pd.to_datetime(timeline_data_frame['Creation Date'])
-    timeline_data_frame['month'] = timeline_data_frame['Creation Date'].dt.to_period('M')
-    timeline_data_frame['Is Answered?'] = timeline_data_frame['Is Answered?'].astype(int)
-    question_counts = timeline_data_frame.groupby('month')['Is Answered?'].sum()
-    question_total = timeline_data_frame.groupby('month').size()
-    plot_df = pd.DataFrame({'Answered Count': question_counts, 'Total Count': question_total}).reset_index()
-    plot_df['month'] = plot_df['month'].astype(str)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=plot_df['month'], y=plot_df['Answered Count'], name='Answered Count'))
-    fig.add_trace(go.Bar(x=plot_df['month'], y=plot_df['Total Count'], name='Total Count'))
-    fig.update_layout(title='Count of Questions Over Time', xaxis_title='month', yaxis_title='Count')
-    return fig
-
-
-### Correlation heatmap
-@app.callback(
-    Output('heatmap-graph', 'figure'),
-    [Input('model-choice', 'value')]
-)
-def update_heatmap(n):
-    heatmap_data_frame = pd.DataFrame(data_frame)
-    heatmap_data_frame['Is Answered?'] = heatmap_data_frame['Is Answered?'].astype(int)
-    numerical_data = data_frame[['Score', 'Is Answered?', 'View Count', 'Answer Count', 'Owner Reputation']]
-    correlation_matrix = numerical_data.corr()
-    fig = px.imshow(correlation_matrix)
-    fig.update_layout(title_text='Correlation Heatmap')
-    return fig
-
-
-
+### Data Analysis: Classification.
 @app.callback(
     Output('classification-report-label', 'children'),
     Output('classification-report', 'data'),
-    Input('model-choice', 'value'),
+    Input('regression-model-choice', 'value'),
     Input('test-size-slider', 'value'),
-    State('model-choice', 'options')
+    State('regression-model-choice', 'options')
 )
 def update_classification_report(model_choice, test_size, model_options):
     selected_label = next((option['label'] for option in model_options if option['value'] == model_choice), '')
@@ -351,7 +546,7 @@ def update_classification_report(model_choice, test_size, model_options):
     chosen_size = test_size / 100
     prediction_data_frame = pd.DataFrame(data_frame)
     prediction_data_frame['Is Answered?'] = prediction_data_frame['Is Answered?'].astype(int)
-    feature_columns = ['Score', 'View Count', 'Answer Count']
+    feature_columns = ['Score', 'View Count', 'Answer Count', 'Owner Reputation', 'Tags Count']
     X = prediction_data_frame[feature_columns]
     y = data_frame['Is Answered?'].astype(int)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=chosen_size, random_state=27)
@@ -371,86 +566,42 @@ def update_classification_report(model_choice, test_size, model_options):
         classifier = LogisticRegression(solver='lbfgs', random_state=27)
         classifier.fit(X_train, y_train)
         y_pred = classifier.predict(X_test)
+    elif model_choice == 'lr_sag':
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        classifier = LogisticRegression(solver='sag', random_state=27, max_iter=10000, C=10)
+        classifier.fit(X_train_scaled, y_train)
+        y_pred = classifier.predict(X_test_scaled)
+    elif model_choice == 'lr_saga':
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        classifier = LogisticRegression(solver='saga', random_state=27, max_iter=10000, C=10)
+        classifier.fit(X_train_scaled, y_train)
+        y_pred = classifier.predict(X_test_scaled)
     elif model_choice == 'decision_tree':
         classifier = DecisionTreeClassifier()
         classifier.fit(X_train, y_train)
         y_pred = classifier.predict(X_test)
-    # Add other model conditions as needed
+    elif model_choice == 'random_forest':
+        classifier = RandomForestClassifier(random_state=27)
+        classifier.fit(X_train, y_train)
+        y_pred = classifier.predict(X_test)
+    elif model_choice == 'svm':
+        classifier = svm.SVC(random_state=27)
+        classifier.fit(X_train, y_train)
+        y_pred = classifier.predict(X_test)
 
     report = classification_report(y_test, y_pred, output_dict=True)
     df_report = pd.DataFrame(report).transpose().reset_index()
     df_report = df_report.round(2)
     classification_report_data = df_report.to_dict('records')
-    
+
     return classification_report_label, classification_report_data
 
 
 
-# @app.callback(
-#     Output('classification-report-label', 'children'),
-#     Input('model-choice', 'value'),
-#     State('model-choice', 'options')
-# )
-# def update_classification_report_label(model_value, model_options):
-#     selected_label = next((option['label'] for option in model_options if option['value'] == model_value), '')
-#     return 'Classification Report ' + '[' + selected_label + ']'
-
-
-
-
+### Run web app.
 if __name__ == '__main__':
     app.run_server(debug=True)
-
-
-### Heatmap:
-# The heatmap in this context is used to display the correlation matrix of the numerical data from the DataFrame.
-# A correlation matrix is a table showing the correlation coefficients between many variables.
-# Each cell in the table shows the correlation between two variables.
-
-# In this case, the heatmap shows the correlation between the following numerical variables:
-# 'Score', 'View Count', 'Answer Count', and 'Owner Reputation'. 
-# Correlation is a statistical measure that expresses the extent to which two variables are linearly related
-# (meaning they change together at a constant rate).
-# It's a common tool for understanding the relationship between multiple variables and features in your dataset.
-
-# The correlation coefficient ranges from -1 to 1:
-# ==> A correlation of -1 indicates a perfect negative correlation, meaning that as one variable goes up, the other goes down.
-# ==> A correlation of +1 indicates a perfect positive correlation, meaning that as one variable goes up, the other goes up.
-# ==> A correlation of 0 indicates that there is no linear relationship between the variables.
-
-# In the heatmap, the closer the color of the cell is to 1 (or to -1), 
-# the stronger the positive (or negative) correlation between the two variables.
-# The closer the color of the cell is to 0, the weaker the correlation.
-# Usually, the colors will be represented in a gradient form, so you can visualize the strength of the correlations. 
-
-
-
-### Predictions:
-# There is being used logistic regression, which is a good choice for binary classification problems.
-# There is also used 'liblinear' solver which is appropriate for small datasets and binary classification.
-
-# Our model has an overall accuracy of 80%, which means 
-# it correctly predicts whether a question is answered or not 80% of the time. 
-
-# Precision, recall, and F1-score are all reasonable.
-# In particular, the model has high precision for class 0 (questions that are not answered),
-# meaning when it predicts a question won't be answered, it's right 93% of the time.
-# On the other hand, it has high recall for class 1 (questions that are answered),
-# meaning it correctly identifies 92% of answered questions.
-
-# The only potential issue here is the difference between class 0 and class 1 results.
-# The model performs significantly better for class 0 in terms of precision, and for class 1 in terms of recall.
-# This could be due to an imbalance in the data, or it might just reflect the inherent difficulty of the prediction task.
-
-# Considering all the above, we could improve the model using the following options:
-# ==> Feature engineering:
-#     Create new features that might be relevant for the task. This might involve domain knowledge about the data.
-# ==> Model selection:
-#     Try out different types of models and see which performs best.
-#     Decision trees, random forest, support vector machines, or neural networks could be options.
-# ==> Hyperparameter tuning:
-#     Experiment with different settings of the model.
-#     In the case of logistic regression, we could adjust the regularization strength ('C' parameter) or try a different solver.
-# ==> Handling class imbalance:
-#     If the classes are imbalanced, we could use techniques such as oversampling the minority class,
-#     undersampling the majority class, or using a more advanced method such as SMOTE.

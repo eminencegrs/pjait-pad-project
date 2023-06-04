@@ -1,0 +1,52 @@
+### Heatmap:
+# The heatmap in this context is used to display the correlation matrix of the numerical data from the DataFrame.
+# A correlation matrix is a table showing the correlation coefficients between many variables.
+# Each cell in the table shows the correlation between two variables.
+
+# In this case, the heatmap shows the correlation between the following numerical variables:
+# 'Score', 'View Count', 'Answer Count', and 'Owner Reputation'. 
+# Correlation is a statistical measure that expresses the extent to which two variables are linearly related
+# (meaning they change together at a constant rate).
+# It's a common tool for understanding the relationship between multiple variables and features in your dataset.
+
+# The correlation coefficient ranges from -1 to 1:
+# ==> A correlation of -1 indicates a perfect negative correlation, meaning that as one variable goes up, the other goes down.
+# ==> A correlation of +1 indicates a perfect positive correlation, meaning that as one variable goes up, the other goes up.
+# ==> A correlation of 0 indicates that there is no linear relationship between the variables.
+
+# In the heatmap, the closer the color of the cell is to 1 (or to -1), 
+# the stronger the positive (or negative) correlation between the two variables.
+# The closer the color of the cell is to 0, the weaker the correlation.
+# Usually, the colors will be represented in a gradient form, so you can visualize the strength of the correlations. 
+
+
+
+### Predictions:
+# There is being used logistic regression, which is a good choice for binary classification problems.
+# There is also used 'liblinear' solver which is appropriate for small datasets and binary classification.
+
+# Our model has an overall accuracy of 80%, which means 
+# it correctly predicts whether a question is answered or not 80% of the time. 
+
+# Precision, recall, and F1-score are all reasonable.
+# In particular, the model has high precision for class 0 (questions that are not answered),
+# meaning when it predicts a question won't be answered, it's right 93% of the time.
+# On the other hand, it has high recall for class 1 (questions that are answered),
+# meaning it correctly identifies 92% of answered questions.
+
+# The only potential issue here is the difference between class 0 and class 1 results.
+# The model performs significantly better for class 0 in terms of precision, and for class 1 in terms of recall.
+# This could be due to an imbalance in the data, or it might just reflect the inherent difficulty of the prediction task.
+
+# Considering all the above, we could improve the model using the following options:
+# ==> Feature engineering:
+#     Create new features that might be relevant for the task. This might involve domain knowledge about the data.
+# ==> Model selection:
+#     Try out different types of models and see which performs best.
+#     Decision trees, random forest, support vector machines, or neural networks could be options.
+# ==> Hyperparameter tuning:
+#     Experiment with different settings of the model.
+#     In the case of logistic regression, we could adjust the regularization strength ('C' parameter) or try a different solver.
+# ==> Handling class imbalance:
+#     If the classes are imbalanced, we could use techniques such as oversampling the minority class,
+#     undersampling the majority class, or using a more advanced method such as SMOTE.
