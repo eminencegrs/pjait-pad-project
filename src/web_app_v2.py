@@ -9,22 +9,26 @@ from dash import dcc
 from dash import html
 from dash.dependencies import Input, Output, State
 
+from datetime import datetime
+
+from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.feature_extraction import FeatureHasher
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
-from sklearn import svm
 
 from column_renamer import ColumnRenamer
 from column_filter import ColumnFilter
 from data_cleaner import DataCleaner
 from data_enhancer import DataEnhancer
 from data_reader import DataReader
+from predictor import QuestionsNumberPredictor
 
 # Read data.
-data_reader = DataReader('questions_small.csv')
+data_reader = DataReader('questions.csv')
 data_frame = data_reader.read_data()
 
 # Choose the required columns only.
@@ -220,7 +224,8 @@ app.layout = html.Div([
         dcc.Graph(id = 'data-distribution-graph'),
     ]),
     html.Div([
-        html.H3('Data Analysis (general)'),
+        html.H3('Data Analysis: Classification'),
+        html.Hr(),
         dcc.Dropdown(
             id='regression-model-choice',
             options=[
@@ -244,7 +249,20 @@ app.layout = html.Div([
         html.Div([
             html.H3('Classification Report', id='classification-report-label'),
             dash_table.DataTable(id='classification-report', data=[])
-        ])
+        ]),
+        html.Div([
+            html.H3('Prediction Results'),
+            html.Hr(),
+            html.Div([
+                dcc.Dropdown(
+                    id='prediction-results-language-choice', 
+                    options=language_options, 
+                    value='All',
+                    style={'width': '150px'}
+                )
+            ], style={'display': 'flex', 'justify-content': 'center', 'gap': '10px' }),
+            dcc.Graph(id='prediction-results-graph'),
+        ]),
     ])
 ])
 
@@ -272,7 +290,7 @@ def update_top_languages_bar(sorting_order):
     fig = go.Figure()
     fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Total Count'], name='All', marker_color='#466ba3'))
     fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Answered Count'], name='Answered Questions', marker_color='#328570'))
-    fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Open Count'], name='Open Questions', marker_color='#e89d87'))
+    fig.add_trace(go.Bar(x=plot_df['Language'], y=plot_df['Open Count'], name='Open Questions', marker_color='#cc4b27'))
     fig.update_layout(xaxis_title='Language', yaxis_title='Count')
     
     return fig
@@ -517,14 +535,14 @@ def update_figure(selected_model, selected_variable, chart_type, selected_langua
                 filtered_df,
                 x = selected_variable,
                 color = 'Is Answered?',
-                color_discrete_sequence = ['purple', 'orange'])
+                color_discrete_sequence = ['#2785cc', '#cc4b27'])
         else:
             figure = px.pie(
                 filtered_df,
                 names = 'Is Answered?',
                 values = selected_variable,
                 title = 'Distribution of ' + selected_variable,
-                color_discrete_sequence = ['purple', 'orange'])
+                color_discrete_sequence = ['#2785cc', '#cc4b27'])
     
     figure.update_layout(transition_duration=500)
     return figure
@@ -599,6 +617,32 @@ def update_classification_report(model_choice, test_size, model_options):
     classification_report_data = df_report.to_dict('records')
 
     return classification_report_label, classification_report_data
+
+
+
+### Prediction: The Number of Questions in Future.
+@app.callback(
+    Output('prediction-results-graph', 'figure'),
+    [Input('interval-component', 'n_intervals'),
+     Input('prediction-results-language-choice', 'value')]
+)
+def update_prediction_results(n, chosen_language):
+    df = QuestionsNumberPredictor.fetch_prediction_results(data_frame)
+
+    if chosen_language != 'All':
+        df = df[df['Language'] == chosen_language]
+    
+    grouped = df.groupby('Language')
+
+    fig = go.Figure()
+
+    for name, group in grouped:
+        fig.add_trace(go.Scatter(x=group['date'], y=group['Actual'], mode='lines', name=f'{name} - Actual'))
+        fig.add_trace(go.Scatter(x=group['date'], y=group['Predicted'], mode='lines', name=f'{name} - Predicted'))
+
+    fig.update_layout(title='Prediction results over time', xaxis_title='Date', yaxis_title='Count')
+
+    return fig
 
 
 
