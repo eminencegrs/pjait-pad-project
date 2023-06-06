@@ -47,6 +47,13 @@ data_frame = renamer.rename_columns(data_frame)
 enhancer = DataEnhancer()
 data_frame = enhancer.enhance(data_frame)
 
+# Get shape, columns and descriptive statistics of the data frame.
+shape_df = pd.DataFrame([data_frame.shape], columns=['Number of Rows', 'Number of Columns'])
+columns_df = pd.DataFrame(data_frame.columns, columns=['Columns'])
+describe_df = data_frame.describe()
+describe_df = describe_df.reset_index().rename(columns={'index': 'Statistic'})
+describe_df = describe_df.drop(['ID', 'Owner ID'], axis=1)
+
 # The variable dropdown.
 variable_options = ['View Count', 'Answer Count', 'Owner Reputation', 'Tags Count']
 
@@ -64,16 +71,56 @@ app.layout = html.Div([
     html.Div([
         html.H3("Questions Dataset"),
         html.Hr(),
-        dash_table.DataTable(
-            id = 'table',
-            columns = [{"name": i, "id": i} for i in data_frame.columns],
-            data = data_frame.to_dict('records'),
-            style_data = {'whiteSpace': 'normal', 'height': 'auto'},
-            style_cell = {'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': 0},
-            style_cell_conditional = [{'if': {'column_id': c}, 'textAlign': 'left'} for c in data_frame.columns],
-            style_header = {'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
-            style_table = {'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
-        ),
+        dcc.Tabs([
+            dcc.Tab(label='Data', children=[
+                dash_table.DataTable(
+                    id='table',
+                    columns=[{"name": i, "id": i} for i in data_frame.columns],
+                    data=data_frame.to_dict('records'),
+                    style_data={'whiteSpace': 'normal', 'height': 'auto'},
+                    style_cell={'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': 0},
+                    style_cell_conditional=[{'if': {'column_id': c}, 'textAlign': 'left'} for c in data_frame.columns],
+                    style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                    style_table={'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
+                ),
+            ]),
+            dcc.Tab(label='Shape', children=[
+                dash_table.DataTable(
+                    id='table-shape',
+                    columns=[{"name": i, "id": i} for i in shape_df.columns],
+                    data=shape_df.to_dict('records'),
+                    style_data={'whiteSpace': 'normal', 'height': 'auto'},
+                    style_cell={'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': 0},
+                    style_cell_conditional=[{'if': {'column_id': c}, 'textAlign': 'left'} for c in shape_df.columns],
+                    style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                    style_table={'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
+                )
+            ]),
+            dcc.Tab(label='Columns', children=[
+                dash_table.DataTable(
+                    id='table-columns',
+                    columns=[{"name": i, "id": i} for i in columns_df.columns],
+                    data=columns_df.to_dict('records'),
+                    style_data={'whiteSpace': 'normal', 'height': 'auto'},
+                    style_cell={'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': 0},
+                    style_cell_conditional=[{'if': {'column_id': c}, 'textAlign': 'left'} for c in columns_df.columns],
+                    style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                    style_table={'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
+                )
+            ]),
+            dcc.Tab(label='Describe', children=[
+                dash_table.DataTable(
+                    id='table-describe',
+                    columns=[{"name": i, "id": i} for i in describe_df.columns],
+                    data=describe_df.to_dict('records'),
+                    style_data={'whiteSpace': 'normal', 'height': 'auto'},
+                    style_cell={'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': 0},
+                    style_cell_conditional=[{'if': {'column_id': c}, 'textAlign': 'left'} for c in describe_df.columns],
+                    style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                    style_table={'maxHeight': '500px', 'overflowY': 'scroll', 'overflowX': 'scroll'}
+                )
+            ]),
+        ]),
         html.Div([
             html.H3('Top Languages', style={ 'justify-content': 'center' }),
             html.Hr(),
