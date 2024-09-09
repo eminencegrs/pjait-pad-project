@@ -2,14 +2,14 @@
 
 ## Introduction
 
-The goal of this project, as part of the Programming, Analysis, and Data (PAD) course, is to collect and analyze data from StackOverflow, a widely-used online platform where developers collaborate to solve programming challenges and learn from each other. By utilizing the StackOverflow API, we will gather data on various aspects of the programming community. This document outlines the prerequisites, the kind of data we aim to collect and analyze, the reasons behind our interest in this data, and the potential insights we hope to uncover.
+The goal of this project, as part of the Programming, Analysis, and Data (PAD) course, is to collect and analyze data from StackOverflow, a widely used online platform where developers collaborate to solve programming challenges and learn from each other. By utilizing the StackOverflow API, we will gather data on various aspects of the programming community. This document outlines the prerequisites, the kind of data we aim to collect and analyze, the reasons behind our interest in this data, and the potential insights we hope to uncover.
 
 ## Prerequisites
 
 To successfully complete the project, the following requirements must be met:
 
 - Familiarity with Python and relevant libraries such as pandas, NumPy, and Matplotlib for data analysis and visualization.
-- Familiarity with other libraries for data analysis including, but not limited, sklearn or similar for machine learning that provide a wide range of simple and efficient tools for data preprocessing, feature extraction, model selection, and evaluation.
+- Familiarity with other libraries for data analysis including, but not limited, sklearn or similar for machine learning that provides a wide range of simple and efficient tools for data preprocessing, feature extraction, model selection, and evaluation.
 - Knowledge of the StackOverflow API and its usage for data retrieval.
 - Understanding of the domain and the kind of data available on StackOverflow.
 - Access to a development environment with necessary tools and libraries installed.
@@ -66,4 +66,4 @@ In summary, our project aims to collect and analyze data from StackOverflow usin
 
 To successfully complete this project, we will leverage Python and relevant libraries for data processing, analysis, and visualization. We will also explore machine learning libraries for classification and regression tasks.
 
-The final deliverables will include a comprehensive Collab notebook containing dashboards, charts nad tables.
+The final deliverables will include a comprehensive Collab notebook containing dashboards, charts and tables.
